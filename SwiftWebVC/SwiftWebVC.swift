@@ -20,7 +20,10 @@ public class SwiftWebVC: UIViewController {
     var buttonColor: UIColor? = nil
     var titleColor: UIColor? = nil
     var closing: Bool! = false
-    
+    var toolbar: UIToolbar!
+    public var searchbarStyle = UIBarStyle.black
+    public var tintColor: UIColor = UIColor.blue
+
     lazy var backBarButtonItem: UIBarButtonItem =  {
         var tempBackBarButtonItem = UIBarButtonItem(image: SwiftWebVC.bundledImage(named: "SwiftWebVCBack"),
                                                     style: UIBarButtonItemStyle.plain,
@@ -67,16 +70,15 @@ public class SwiftWebVC: UIViewController {
     
     
     lazy var webView: WKWebView = {
-        var tempWebView = WKWebView(frame: UIScreen.main.bounds)
+        var tempWebView = WKWebView(frame: .zero)
         tempWebView.uiDelegate = self
         tempWebView.navigationDelegate = self
+        tempWebView.isOpaque = false
+
         return tempWebView;
     }()
     
     var request: URLRequest!
-    
-    var navBarTitle: UILabel!
-    
     var sharingEnabled = true
     
     ////////////////////////////////////////////////
@@ -106,57 +108,59 @@ public class SwiftWebVC: UIViewController {
         self.request = aRequest
     }
     
-    func loadRequest(_ request: URLRequest) {
-        webView.load(request)
-    }
-    
     ////////////////////////////////////////////////
     // View Lifecycle
     
-    override public func loadView() {
-        view = webView
-        loadRequest(request)
-    }
-    
     override public func viewDidLoad() {
         super.viewDidLoad()
+        
+        webView.load(request)
+        self.view.addSubview(webView)
+        
+        toolbar = UIToolbar(frame: CGRect(x: 0.0, y: 0.0, width: 250, height: 44.0))
+        self.view.addSubview(toolbar)
+        
+        self.webView.translatesAutoresizingMaskIntoConstraints = false
+        self.toolbar.translatesAutoresizingMaskIntoConstraints = false
+        
+        
+        if #available(iOS 11.0, *) {
+            
+            let guide = self.view.safeAreaLayoutGuide
+            self.toolbar.widthAnchor.constraint(equalTo: guide.widthAnchor).isActive = true
+            self.toolbar.bottomAnchor.constraint(equalTo: guide.bottomAnchor).isActive = true
+            self.toolbar.heightAnchor.constraint(equalToConstant: 44).isActive = true
+            
+            self.webView.topAnchor.constraint(equalTo: guide.topAnchor).isActive = true
+            self.webView.bottomAnchor.constraint(equalTo: toolbar.topAnchor).isActive = true
+            self.webView.widthAnchor.constraint(equalTo: guide.widthAnchor).isActive = true
+
+            
+        } else if #available(iOS 10.0, *) {
+            self.webView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor, constant: 0).isActive = true
+            self.webView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor, constant: 0).isActive = true
+            self.webView.topAnchor.constraint(equalTo: self.topLayoutGuide.topAnchor).isActive = true
+            self.webView.bottomAnchor.constraint(equalTo: toolbar.topAnchor).isActive = true
+            
+            self.toolbar.bottomAnchor.constraint(equalTo: self.view.bottomAnchor).isActive = true
+            self.toolbar.widthAnchor.constraint(equalTo: self.view.widthAnchor).isActive = true
+            self.toolbar.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        }
+        
+        updateToolbarItems()
+        
+
     }
     
     override public func viewWillAppear(_ animated: Bool) {
         assert(self.navigationController != nil, "SVWebViewController needs to be contained in a UINavigationController. If you are presenting SVWebViewController modally, use SVModalWebViewController instead.")
-        
-        updateToolbarItems()
-        navBarTitle = UILabel()
-        navBarTitle.backgroundColor = UIColor.clear
-        if presentingViewController == nil {
-            if let titleAttributes = navigationController!.navigationBar.titleTextAttributes {
-                navBarTitle.textColor = titleAttributes[.foregroundColor] as? UIColor
-            }
-        }
-        else {
-            navBarTitle.textColor = self.titleColor
-        }
-        navBarTitle.shadowOffset = CGSize(width: 0, height: 1);
-        navBarTitle.font = UIFont(name: "HelveticaNeue-Medium", size: 17.0)
-        navBarTitle.textAlignment = .center
-        navigationItem.titleView = navBarTitle;
-        
         super.viewWillAppear(true)
         
-        if (UIDevice.current.userInterfaceIdiom == UIUserInterfaceIdiom.phone) {
-            self.navigationController?.setToolbarHidden(false, animated: false)
-        }
-        else if (UIDevice.current.userInterfaceIdiom == UIUserInterfaceIdiom.pad) {
-            self.navigationController?.setToolbarHidden(true, animated: true)
-        }
+        self.navigationController?.isNavigationBarHidden = false
     }
     
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(true)
-        
-        if (UIDevice.current.userInterfaceIdiom == UIUserInterfaceIdiom.phone) {
-            self.navigationController?.setToolbarHidden(true, animated: true)
-        }
     }
     
     override public func viewDidDisappear(_ animated: Bool) {
@@ -175,42 +179,19 @@ public class SwiftWebVC: UIViewController {
         
         let fixedSpace: UIBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.fixedSpace, target: nil, action: nil)
         let flexibleSpace: UIBarButtonItem = UIBarButtonItem(barButtonSystemItem: UIBarButtonSystemItem.flexibleSpace, target: nil, action: nil)
+        fixedSpace.width = 35.0
         
-        if (UIDevice.current.userInterfaceIdiom == UIUserInterfaceIdiom.pad) {
-            
-            let toolbarWidth: CGFloat = 250.0
-            fixedSpace.width = 35.0
-            
-            let items: NSArray = sharingEnabled ? [fixedSpace, refreshStopBarButtonItem, fixedSpace, backBarButtonItem, fixedSpace, forwardBarButtonItem, fixedSpace, actionBarButtonItem] : [fixedSpace, refreshStopBarButtonItem, fixedSpace, backBarButtonItem, fixedSpace, forwardBarButtonItem]
-            
-            let toolbar: UIToolbar = UIToolbar(frame: CGRect(x: 0.0, y: 0.0, width: toolbarWidth, height: 44.0))
-            if !closing {
-                toolbar.items = items as? [UIBarButtonItem]
-                if presentingViewController == nil {
-                    toolbar.barTintColor = navigationController!.navigationBar.barTintColor
-                }
-                else {
-                    toolbar.barStyle = navigationController!.navigationBar.barStyle
-                }
-                toolbar.tintColor = navigationController!.navigationBar.tintColor
-            }
-            navigationItem.rightBarButtonItems = items.reverseObjectEnumerator().allObjects as? [UIBarButtonItem]
-            
-        }
-        else {
-            let items: NSArray = sharingEnabled ? [fixedSpace, backBarButtonItem, flexibleSpace, forwardBarButtonItem, flexibleSpace, refreshStopBarButtonItem, flexibleSpace, actionBarButtonItem, fixedSpace] : [fixedSpace, backBarButtonItem, flexibleSpace, forwardBarButtonItem, flexibleSpace, refreshStopBarButtonItem, fixedSpace]
-            
-            if let navigationController = navigationController, !closing {
-                if presentingViewController == nil {
-                    navigationController.toolbar.barTintColor = navigationController.navigationBar.barTintColor
-                }
-                else {
-                    navigationController.toolbar.barStyle = navigationController.navigationBar.barStyle
-                }
-                navigationController.toolbar.tintColor = navigationController.navigationBar.tintColor
-                toolbarItems = items as? [UIBarButtonItem]
-            }
-        }
+        let items: NSArray = sharingEnabled ?
+            [flexibleSpace, refreshStopBarButtonItem, flexibleSpace, backBarButtonItem, flexibleSpace, forwardBarButtonItem, flexibleSpace, actionBarButtonItem] :
+            [flexibleSpace, refreshStopBarButtonItem, flexibleSpace, backBarButtonItem, flexibleSpace, forwardBarButtonItem, flexibleSpace]
+        
+        toolbar.items = items as? [UIBarButtonItem]
+        toolbar.barStyle = self.searchbarStyle
+        toolbar.isTranslucent = false
+        toolbar.isUserInteractionEnabled = true
+        toolbar.backgroundColor = .clear
+        toolbar.tintColor = self.tintColor
+        toolbar.sizeToFit()
     }
     
     
@@ -299,8 +280,7 @@ extension SwiftWebVC: WKNavigationDelegate {
         UIApplication.shared.isNetworkActivityIndicatorVisible = false
         
         webView.evaluateJavaScript("document.title", completionHandler: {(response, error) in
-            self.navBarTitle.text = response as! String?
-            self.navBarTitle.sizeToFit()
+            self.navigationItem.title = response as! String?
             self.updateToolbarItems()
         })
         
